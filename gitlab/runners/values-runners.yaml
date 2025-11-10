@@ -1,0 +1,113 @@
+---
+# GitLab Runner Configuration
+# Doc-Type: Configuration · Version 1.0 · Updated 2025-11-10
+
+gitlabUrl: https://gitlab.company.com
+
+runnerRegistrationToken: ""
+
+concurrent: 10
+
+checkInterval: 30
+
+rbac:
+  create: true
+  clusterWideAccess: false
+  podSecurityPolicy:
+    enabled: false
+
+metrics:
+  enabled: true
+
+runners:
+  config: |
+    [[runners]]
+      [runners.kubernetes]
+        namespace = "{{.Release.Namespace}}"
+        image = "ubuntu:22.04"
+        privileged = false
+        cpu_request = "500m"
+        cpu_limit = "2000m"
+        memory_request = "1Gi"
+        memory_limit = "4Gi"
+        service_cpu_request = "100m"
+        service_cpu_limit = "500m"
+        service_memory_request = "128Mi"
+        service_memory_limit = "512Mi"
+        helper_cpu_request = "100m"
+        helper_cpu_limit = "500m"
+        helper_memory_request = "128Mi"
+        helper_memory_limit = "512Mi"
+        poll_timeout = 180
+
+        [runners.kubernetes.node_selector]
+          "workload-type" = "ci-cd"
+
+        [runners.kubernetes.pod_labels]
+          "app" = "gitlab-runner"
+          "managed-by" = "gitlab"
+
+        [runners.kubernetes.pod_annotations]
+          "prometheus.io/scrape" = "true"
+          "prometheus.io/port" = "9252"
+
+        [[runners.kubernetes.volumes.empty_dir]]
+          name = "docker-certs"
+          mount_path = "/certs/client"
+          medium = "Memory"
+
+  cache:
+    secretName: gitlab-runner-cache
+
+  builds:
+    cpuLimit: 2000m
+    cpuRequests: 500m
+    memoryLimit: 4Gi
+    memoryRequests: 1Gi
+
+  services:
+    cpuLimit: 500m
+    cpuRequests: 100m
+    memoryLimit: 512Mi
+    memoryRequests: 128Mi
+
+  helpers:
+    cpuLimit: 500m
+    cpuRequests: 100m
+    memoryLimit: 512Mi
+    memoryRequests: 128Mi
+
+  tags: "docker,kubernetes,production"
+
+  runUntagged: false
+
+  locked: false
+
+  protected: false
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: workload-type
+              operator: In
+              values:
+                - ci-cd
+
+nodeSelector:
+  workload-type: ci-cd
+
+replicas: 5
+
+sessionServer:
+  enabled: false

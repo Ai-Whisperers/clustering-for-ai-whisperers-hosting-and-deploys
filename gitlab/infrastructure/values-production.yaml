@@ -1,0 +1,251 @@
+---
+# GitLab Production Helm Values
+# Doc-Type: Configuration · Version 1.0 · Updated 2025-11-10
+
+global:
+  edition: ee
+
+  hosts:
+    domain: company.com
+    https: true
+    gitlab:
+      name: gitlab.company.com
+    registry:
+      name: registry.company.com
+    minio:
+      name: minio.company.com
+
+  ingress:
+    enabled: true
+    class: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    tls:
+      enabled: true
+
+  psql:
+    host: gitlab-postgresql
+    password:
+      secret: gitlab-postgres-secret
+      key: password
+    database: gitlabhq_production
+
+  redis:
+    host: gitlab-redis-master
+    password:
+      enabled: true
+      secret: gitlab-redis-secret
+      key: password
+
+  gitaly:
+    enabled: true
+    external: []
+    authToken:
+      secret: gitlab-gitaly-secret
+      key: token
+
+  minio:
+    enabled: false
+
+  appConfig:
+    enableUsagePing: false
+    enableSeatLink: false
+
+    lfs:
+      enabled: true
+      proxy_download: true
+      bucket: gitlab-lfs
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+
+    artifacts:
+      enabled: true
+      proxy_download: true
+      bucket: gitlab-artifacts
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+
+    uploads:
+      enabled: true
+      proxy_download: true
+      bucket: gitlab-uploads
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+
+    packages:
+      enabled: true
+      proxy_download: true
+      bucket: gitlab-packages
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+
+    backups:
+      bucket: gitlab-backups
+      tmpBucket: gitlab-tmp
+
+gitlab:
+  webservice:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+    workhorse:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
+        limits:
+          cpu: 500m
+          memory: 500Mi
+
+  sidekiq:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  gitaly:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      storageClass: fast-ssd
+      size: 500Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  gitlab-shell:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      limits:
+        cpu: 500m
+        memory: 500Mi
+
+registry:
+  enabled: true
+  replicaCount: 2
+
+  storage:
+    secret: gitlab-registry-storage
+    key: config
+    extraKey: s3.yaml
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+postgresql:
+  install: true
+  image:
+    tag: 14.9
+
+  auth:
+    existingSecret: gitlab-postgres-secret
+    secretKeys:
+      adminPasswordKey: password
+
+  primary:
+    persistence:
+      enabled: true
+      size: 200Gi
+      storageClass: fast-ssd
+
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 200Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+redis:
+  install: true
+  architecture: replication
+
+  auth:
+    enabled: true
+    existingSecret: gitlab-redis-secret
+    existingSecretPasswordKey: password
+
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+
+prometheus:
+  install: true
+  server:
+    enabled: true
+    retention: 15d
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+
+certmanager:
+  install: false
+
+nginx-ingress:
+  enabled: false
+
+gitlab-runner:
+  install: false

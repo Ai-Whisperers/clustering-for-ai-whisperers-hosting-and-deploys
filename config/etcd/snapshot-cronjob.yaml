@@ -1,0 +1,153 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: etcd-backup
+  labels:
+    app.kubernetes.io/name: etcd-backup
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: etcd-backup
+  namespace: etcd-backup
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: etcd-backup
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: etcd-backup
+subjects:
+  - kind: ServiceAccount
+    name: etcd-backup
+    namespace: etcd-backup
+roleRef:
+  kind: ClusterRole
+  name: etcd-backup
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: etcd-backup-script
+  namespace: etcd-backup
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    SNAPSHOT_NAME="etcd-snapshot-${TIMESTAMP}.db"
+    LOCAL_PATH="/backup/${SNAPSHOT_NAME}"
+
+    echo "Creating etcd snapshot: ${SNAPSHOT_NAME}"
+
+    ETCDCTL_API=3 etcdctl snapshot save ${LOCAL_PATH} \
+      --endpoints=https://127.0.0.1:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key
+
+    echo "Verifying snapshot integrity"
+    ETCDCTL_API=3 etcdctl snapshot status ${LOCAL_PATH} -w table
+
+    echo "Compressing snapshot"
+    gzip ${LOCAL_PATH}
+
+    echo "Uploading to S3"
+    aws s3 cp ${LOCAL_PATH}.gz s3://k8s-etcd-snapshots/cluster-01/${SNAPSHOT_NAME}.gz \
+      --server-side-encryption aws:kms \
+      --ssekms-key-id ${KMS_KEY_ID}
+
+    echo "Cleaning up old local snapshots"
+    find /backup -name "etcd-snapshot-*.db.gz" -mtime +7 -delete
+
+    echo "Snapshot backup completed successfully"
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-snapshot
+  namespace: etcd-backup
+spec:
+  schedule: "0 */4 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: etcd-backup
+        spec:
+          serviceAccountName: etcd-backup
+          hostNetwork: true
+          restartPolicy: OnFailure
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          containers:
+            - name: etcd-backup
+              image: bitnami/etcd:3.5.10
+              command: ["/bin/bash", "/scripts/backup.sh"]
+              env:
+                - name: ETCDCTL_API
+                  value: "3"
+                - name: KMS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: etcd-backup-secrets
+                      key: kms_key_id
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: etcd-backup-secrets
+                      key: aws_access_key_id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: etcd-backup-secrets
+                      key: aws_secret_access_key
+                - name: AWS_DEFAULT_REGION
+                  value: "us-east-1"
+              volumeMounts:
+                - name: etcd-certs
+                  mountPath: /etc/kubernetes/pki/etcd
+                  readOnly: true
+                - name: backup-storage
+                  mountPath: /backup
+                - name: backup-script
+                  mountPath: /scripts
+          volumes:
+            - name: etcd-certs
+              hostPath:
+                path: /etc/kubernetes/pki/etcd
+                type: Directory
+            - name: backup-storage
+              hostPath:
+                path: /var/lib/etcd/snapshots
+                type: DirectoryOrCreate
+            - name: backup-script
+              configMap:
+                name: etcd-backup-script
+                defaultMode: 0755

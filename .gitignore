@@ -1,0 +1,84 @@
+# Kubernetes Cluster Administration - GitIgnore
+# Doc-Type: Configuration · Version 1.0 · Updated 2025-11-10
+
+# Secrets and credentials
+*.key
+*.crt
+*.pem
+*-secret.yaml
+credentials-*
+kubeconfig
+.kube/
+**/secrets.yaml
+**/secrets-*.yaml
+!**/secrets-template.yaml
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Backup files
+*.backup
+*.bak
+*.old
+backups/
+snapshots/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-*
+.project
+.classpath
+.settings/
+
+# Helm
+*.tgz
+charts/*/charts/
+charts/*/*.lock
+
+# Terraform state (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Local development
+local/
+tmp/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# AWS credentials
+aws-credentials
+*.pem
+
+# Docker
+.dockerignore
+
+# Personal notes
+NOTES.md
+TODO.md
+notes/

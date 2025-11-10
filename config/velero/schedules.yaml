@@ -1,0 +1,53 @@
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: full-cluster-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    ttl: 720h0m0s
+    includedNamespaces:
+      - "*"
+    snapshotVolumes: true
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: critical-namespaces-backup
+  namespace: velero
+spec:
+  schedule: "0 */6 * * *"
+  template:
+    ttl: 168h0m0s
+    includedNamespaces:
+      - production
+      - gitlab
+      - monitoring
+    snapshotVolumes: true
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: gitlab-hourly-backup
+  namespace: velero
+spec:
+  schedule: "0 * * * *"
+  template:
+    ttl: 72h0m0s
+    includedNamespaces:
+      - gitlab
+    snapshotVolumes: true
+    storageLocation: default
+    labelSelector:
+      matchLabels:
+        backup: hourly

@@ -1,0 +1,176 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/name: argocd
+    app.kubernetes.io/part-of: gitops
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Repository credentials template
+  repository.credentials: |
+    - url: https://gitlab.company.com
+      passwordSecret:
+        name: gitlab-repo-creds
+        key: password
+      usernameSecret:
+        name: gitlab-repo-creds
+        key: username
+
+  # Application settings
+  application.instanceLabelKey: app.kubernetes.io/instance
+
+  # Git settings
+  timeout.reconciliation: 180s
+  timeout.hard.reconciliation: 0s
+
+  # SSO Configuration (GitLab)
+  url: https://argocd.company.com
+  dex.config: |
+    connectors:
+      - type: gitlab
+        id: gitlab
+        name: GitLab
+        config:
+          baseURL: https://gitlab.company.com
+          clientID: $argocd-gitlab-sso:client_id
+          clientSecret: $argocd-gitlab-sso:client_secret
+          redirectURI: https://argocd.company.com/api/dex/callback
+          groups:
+            - admin-team
+            - dev-team
+
+  # Resource customizations
+  resource.customizations: |
+    networking.k8s.io/Ingress:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        return hs
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # Admin role
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, projects, *, *, allow
+    p, role:admin, accounts, *, *, allow
+    p, role:admin, certificates, *, *, allow
+
+    # Developer role
+    p, role:developer, applications, get, */*, allow
+    p, role:developer, applications, sync, */dev/*, allow
+    p, role:developer, applications, sync, */staging/*, allow
+    p, role:developer, repositories, get, *, allow
+    p, role:developer, projects, get, *, allow
+
+    # GitLab groups mapping
+    g, admin-team, role:admin
+    g, dev-team, role:developer
+
+  scopes: '[groups, email]'
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.slack: |
+    token: $argocd-notifications-secret:slack-token
+
+  service.webhook.gitlab: |
+    url: https://gitlab.company.com/api/v4/projects/$PROJECT_ID/statuses/$COMMIT_SHA
+    headers:
+    - name: PRIVATE-TOKEN
+      value: $argocd-notifications-secret:gitlab-token
+
+  trigger.on-deployed: |
+    - when: app.status.operationState.phase in ['Succeeded']
+      send: [app-deployed]
+
+  trigger.on-health-degraded: |
+    - when: app.status.health.status == 'Degraded'
+      send: [app-health-degraded]
+
+  trigger.on-sync-failed: |
+    - when: app.status.operationState.phase in ['Error', 'Failed']
+      send: [app-sync-failed]
+
+  template.app-deployed: |
+    message: |
+      Application {{.app.metadata.name}} deployed successfully.
+      Sync Status: {{.app.status.sync.status}}
+      Health Status: {{.app.status.health.status}}
+    slack:
+      attachments: |
+        [{
+          "color": "good",
+          "title": "{{.app.metadata.name}}",
+          "title_link": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "fields": [{
+            "title": "Sync Status",
+            "value": "{{.app.status.sync.status}}",
+            "short": true
+          }, {
+            "title": "Health Status",
+            "value": "{{.app.status.health.status}}",
+            "short": true
+          }]
+        }]
+
+  template.app-health-degraded: |
+    message: |
+      Application {{.app.metadata.name}} health is degraded.
+      Health Status: {{.app.status.health.status}}
+    slack:
+      attachments: |
+        [{
+          "color": "warning",
+          "title": "{{.app.metadata.name}}",
+          "title_link": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "fields": [{
+            "title": "Health Status",
+            "value": "{{.app.status.health.status}}",
+            "short": true
+          }]
+        }]
+
+  template.app-sync-failed: |
+    message: |
+      Application {{.app.metadata.name}} sync failed.
+      Sync Status: {{.app.status.sync.status}}
+    slack:
+      attachments: |
+        [{
+          "color": "danger",
+          "title": "{{.app.metadata.name}}",
+          "title_link": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}",
+          "fields": [{
+            "title": "Sync Status",
+            "value": "{{.app.status.sync.status}}",
+            "short": true
+          }]
+        }]

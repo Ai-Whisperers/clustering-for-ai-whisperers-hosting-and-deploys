@@ -1,0 +1,103 @@
+---
+# Kubernetes Namespaces
+# Doc-Type: Configuration · Version 1.0 · Updated 2025-11-10
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    name: production
+    environment: production
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    name: staging
+    environment: staging
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    name: dev
+    environment: development
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitlab
+  labels:
+    name: gitlab
+    environment: production
+    managed-by: argocd
+    backup: hourly
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitlab-runners
+  labels:
+    name: gitlab-runners
+    environment: production
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    name: argocd
+    environment: production
+    managed-by: manual
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    environment: production
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    name: ingress-nginx
+    environment: production
+    managed-by: argocd
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero
+  labels:
+    name: velero
+    environment: production
+    managed-by: manual
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: etcd-backup
+  labels:
+    name: etcd-backup
+    environment: production
+    managed-by: manual

@@ -1,0 +1,131 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Production environment applications
+
+  sourceRepos:
+    - https://gitlab.company.com/infrastructure/*
+    - https://charts.company.com
+
+  destinations:
+    - namespace: production
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+    - namespace: ingress-nginx
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  roles:
+    - name: admin
+      description: Admin privileges for production project
+      policies:
+        - p, proj:production:admin, applications, *, production/*, allow
+      groups:
+        - admin-team
+
+    - name: developer
+      description: Developer read-only access
+      policies:
+        - p, proj:production:developer, applications, get, production/*, allow
+      groups:
+        - dev-team
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gitlab
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: GitLab infrastructure and runners
+
+  sourceRepos:
+    - https://gitlab.company.com/gitlab/*
+    - https://charts.gitlab.io
+
+  destinations:
+    - namespace: gitlab
+      server: https://kubernetes.default.svc
+    - namespace: gitlab-runners
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  syncWindows:
+    - kind: allow
+      schedule: '0 2 * * *'
+      duration: 2h
+      applications:
+        - gitlab-*
+      manualSync: true
+
+  roles:
+    - name: admin
+      description: Admin privileges for GitLab project
+      policies:
+        - p, proj:gitlab:admin, applications, *, gitlab/*, allow
+      groups:
+        - admin-team
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: development
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Development environment applications
+
+  sourceRepos:
+    - https://gitlab.company.com/infrastructure/*
+    - https://gitlab.company.com/applications/*
+    - https://charts.company.com
+
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+    - namespace: dev-*
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  orphanedResources:
+    warn: true
+
+  roles:
+    - name: developer
+      description: Developer full access to dev environment
+      policies:
+        - p, proj:development:developer, applications, *, development/*, allow
+      groups:
+        - dev-team
